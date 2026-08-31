@@ -1,10 +1,8 @@
-# vicle.py - Enhanced Vehicle Information System with Mandatory Proxy
+# vicle.py - Vehicle Information System for Vercel with HTTP Proxies
 # Author: @KINGFFAIAK47x
-# Description: Vehicle details scraper with Webshare proxy (proxy mandatory for every request)
 
 import requests
 from bs4 import BeautifulSoup
-import re
 from flask import Flask, request, jsonify
 import time
 import random
@@ -12,7 +10,7 @@ import random
 app = Flask(__name__)
 
 # ===============================================
-# PROXY CONFIGURATION FROM WEBSHARE
+# HTTP/HTTPS PROXY CONFIGURATION
 # ===============================================
 PROXY_LIST = [
     {
@@ -21,7 +19,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "United Kingdom",
-        "city": "London"
+        "city": "London",
+        "protocol": "http"
     },
     {
         "ip": "45.38.107.97",
@@ -29,7 +28,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "United Kingdom",
-        "city": "London"
+        "city": "London",
+        "protocol": "http"
     },
     {
         "ip": "198.105.121.200",
@@ -37,7 +37,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "United Kingdom",
-        "city": "London"
+        "city": "London",
+        "protocol": "http"
     },
     {
         "ip": "64.137.96.74",
@@ -45,7 +46,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "Spain",
-        "city": "Madrid"
+        "city": "Madrid",
+        "protocol": "http"
     },
     {
         "ip": "198.23.243.226",
@@ -53,7 +55,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "United States",
-        "city": "Los Angeles"
+        "city": "Los Angeles",
+        "protocol": "http"
     },
     {
         "ip": "84.247.60.125",
@@ -61,7 +64,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "Poland",
-        "city": "Warsaw"
+        "city": "Warsaw",
+        "protocol": "http"
     },
     {
         "ip": "142.111.67.146",
@@ -69,7 +73,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "Japan",
-        "city": "Tokyo"
+        "city": "Tokyo",
+        "protocol": "http"
     },
     {
         "ip": "191.96.254.138",
@@ -77,7 +82,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "United States",
-        "city": "Los Angeles"
+        "city": "Los Angeles",
+        "protocol": "http"
     },
     {
         "ip": "31.58.9.4",
@@ -85,7 +91,8 @@ PROXY_LIST = [
         "username": "ANSHBR01",
         "password": "BRO12341",
         "country": "Germany",
-        "city": "Frankfurt"
+        "city": "Frankfurt",
+        "protocol": "http"
     }
 ]
 
@@ -95,21 +102,21 @@ HEADERS = {
     "Accept-Language": "en-US,en;q=0.9",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
     "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1"
+    "Connection": "keep-alive"
 }
 
-# Store working proxies
+# Cache for working proxies
 WORKING_PROXIES = []
-last_test_time = 0
+LAST_TEST_TIME = 0
 
 # ===============================================
-# PROXY TESTING FUNCTION
+# PROXY TESTING
 # ===============================================
 def test_proxy(proxy):
-    """Test if proxy is working"""
+    """Test HTTP/HTTPS proxy"""
     try:
-        proxy_url = f"socks5://{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}/"
+        # HTTP proxy format
+        proxy_url = f"http://{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
         proxies = {
             'http': proxy_url,
             'https': proxy_url
@@ -118,111 +125,115 @@ def test_proxy(proxy):
         test_response = requests.get(
             'https://api.ipify.org?format=json',
             proxies=proxies,
-            timeout=10
+            timeout=5
         )
         
         if test_response.status_code == 200:
-            ip_data = test_response.json()
             return {
                 "status": "working",
-                "proxy_ip": ip_data.get('ip'),
                 "proxy": f"{proxy['ip']}:{proxy['port']}",
                 "country": proxy['country'],
                 "city": proxy['city'],
                 "proxy_obj": proxy
             }
-        else:
-            return {"status": "failed", "proxy": f"{proxy['ip']}:{proxy['port']}"}
+        return {"status": "failed"}
     except Exception as e:
-        return {"status": "failed", "proxy": f"{proxy['ip']}:{proxy['port']}", "error": str(e)}
+        return {"status": "failed", "error": str(e)}
 
 def get_working_proxies():
-    """Get list of working proxies"""
-    global WORKING_PROXIES, last_test_time
+    """Get working proxies with caching"""
+    global WORKING_PROXIES, LAST_TEST_TIME
     
-    # Test proxies if list is empty or last test was more than 5 minutes ago
     current_time = time.time()
-    if not WORKING_PROXIES or (current_time - last_test_time) > 300:
-        print("🔄 Testing proxies...")
-        WORKING_PROXIES = []
-        
-        for proxy in PROXY_LIST:
-            print(f"🔍 Testing {proxy['ip']}:{proxy['port']}...", end=" ")
-            result = test_proxy(proxy)
-            
-            if result['status'] == 'working':
-                print(f"✅ WORKING")
-                WORKING_PROXIES.append(result)
-            else:
-                print(f"❌ FAILED")
-            
-            time.sleep(0.5)
-        
-        last_test_time = current_time
-        print(f"✅ Total working proxies: {len(WORKING_PROXIES)}\n")
     
+    # Cache for 5 minutes
+    if WORKING_PROXIES and (current_time - LAST_TEST_TIME) < 300:
+        return WORKING_PROXIES
+    
+    print("Testing proxies...")
+    WORKING_PROXIES = []
+    
+    # Test proxies
+    for proxy in PROXY_LIST[:5]:  # Test first 5
+        result = test_proxy(proxy)
+        if result.get('status') == 'working':
+            WORKING_PROXIES.append(result)
+            print(f"✅ {proxy['ip']}:{proxy['port']} WORKING")
+        else:
+            print(f"❌ {proxy['ip']}:{proxy['port']} FAILED")
+        time.sleep(0.3)
+    
+    LAST_TEST_TIME = current_time
+    print(f"Total working: {len(WORKING_PROXIES)}")
     return WORKING_PROXIES
 
 # ===============================================
-# VEHICLE INFO SCRAPER WITH MANDATORY PROXY
+# VEHICLE SCRAPER
 # ===============================================
-def get_vehicle_details_with_proxy(rc_number: str):
-    """Fetch vehicle details using proxy - proxy is mandatory"""
+def get_vehicle_details(rc_number: str):
+    """Fetch vehicle details using HTTP proxy"""
     rc = rc_number.strip().upper()
     url = f"https://vahanx.in/rc-search/{rc}"
     
-    # Get working proxies
     working_proxies = get_working_proxies()
     
+    # Try without proxy if no working proxies
     if not working_proxies:
-        return {
-            "status": "error", 
-            "message": "No working proxies available. Please check your proxy configuration."
-        }
+        print("No working proxies, trying direct...")
+        try:
+            response = requests.get(url, headers=HEADERS, timeout=10)
+            if response.status_code == 200:
+                return parse_response(response.text)
+        except:
+            pass
+        return {"status": "error", "message": "No working proxies and direct request failed"}
     
-    # Shuffle for rotation
+    # Try with proxies
     random.shuffle(working_proxies)
     
-    last_error = None
-    
-    for proxy_info in working_proxies:
+    for proxy_info in working_proxies[:3]:
         try:
             proxy_obj = proxy_info['proxy_obj']
-            proxy_url = f"socks5://{proxy_obj['username']}:{proxy_obj['password']}@{proxy_obj['ip']}:{proxy_obj['port']}/"
+            proxy_url = f"http://{proxy_obj['username']}:{proxy_obj['password']}@{proxy_obj['ip']}:{proxy_obj['port']}"
             proxies = {
                 'http': proxy_url,
                 'https': proxy_url
             }
             
-            print(f"🔄 Trying proxy: {proxy_obj['ip']}:{proxy_obj['port']} ({proxy_obj['country']})")
-            
             response = requests.get(
                 url,
                 headers=HEADERS,
                 proxies=proxies,
-                timeout=30
+                timeout=10
             )
             
             if response.status_code == 200:
-                print(f"✅ Success with proxy: {proxy_obj['ip']}:{proxy_obj['port']}")
                 return parse_response(response.text, proxy_obj)
-            else:
-                last_error = f"Status: {response.status_code}"
-                print(f"❌ Failed: {last_error}")
                 
         except Exception as e:
-            last_error = str(e)
-            print(f"❌ Error: {last_error}")
             continue
     
-    return {
-        "status": "error", 
-        "message": f"All proxies failed. Last error: {last_error}"
-    }
+    # Fallback: Try without proxy
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=10)
+        if response.status_code == 200:
+            return parse_response(response.text)
+    except:
+        pass
+    
+    return {"status": "error", "message": "All requests failed"}
 
 def parse_response(html_content, proxy_used=None):
-    """Parse HTML response and extract vehicle details"""
+    """Parse HTML response"""
     soup = BeautifulSoup(html_content, "html.parser")
+    
+    def extract_card(label):
+        for div in soup.select(".hrcd-cardbody"):
+            span = div.find("span")
+            if span and label.lower() in span.text.lower():
+                p = div.find("p")
+                return p.get_text(strip=True) if p else None
+        return None
     
     def get_value(label):
         try:
@@ -233,14 +244,6 @@ def parse_response(html_content, proxy_used=None):
                 return p.get_text(strip=True) if p else None
         except:
             return None
-        return None
-    
-    def extract_card(label):
-        for div in soup.select(".hrcd-cardbody"):
-            span = div.find("span")
-            if span and label.lower() in span.text.lower():
-                p = div.find("p")
-                return p.get_text(strip=True) if p else None
         return None
     
     address = extract_card("Address") or get_value("Address")
@@ -258,15 +261,11 @@ def parse_response(html_content, proxy_used=None):
         data["proxy_used"] = f"{proxy_used['ip']}:{proxy_used['port']} ({proxy_used['country']})"
     
     # Remove None values
-    def clean_dict(d):
-        if isinstance(d, dict):
-            return {k: clean_dict(v) for k, v in d.items() if v is not None and v != ""}
-        return d
-    
-    return clean_dict(data)
+    data = {k: v for k, v in data.items() if v is not None and v != ""}
+    return data
 
 # ===============================================
-# FLASK API ROUTES
+# FLASK ROUTES
 # ===============================================
 @app.route("/", methods=["GET"])
 def home():
@@ -275,14 +274,13 @@ def home():
         "service": "Vehicle Information API",
         "version": "2.0",
         "author": "@KINGFFAIAK47x",
-        "proxy_support": "Webshare Proxies (Mandatory)",
+        "proxy_type": "HTTP/HTTPS",
         "proxy_count": len(PROXY_LIST),
         "endpoints": {
             "vehicle_info": "/api/vehicle-info?rc=<RC_NUMBER>",
             "test_proxies": "/api/test-proxies",
             "health": "/health"
-        },
-        "example": "http://localhost:8888/api/vehicle-info?rc=DL01AB1234"
+        }
     })
 
 @app.route("/health", methods=["GET"])
@@ -297,7 +295,7 @@ def health():
 
 @app.route("/api/test-proxies", methods=["GET"])
 def test_proxies():
-    """Test all configured proxies"""
+    """Test proxies endpoint"""
     start_time = time.time()
     working = get_working_proxies()
     response_time_ms = int((time.time() - start_time) * 1000)
@@ -332,14 +330,13 @@ def get_vehicle_info():
     start_time = time.time()
     
     try:
-        data = get_vehicle_details_with_proxy(rc)
+        data = get_vehicle_details(rc)
         response_time_ms = int((time.time() - start_time) * 1000)
         
         if data.get("status") == "error":
             data["author"] = "@KINGFFAIAK47x"
             return jsonify(data), 404
         
-        # Create ordered response
         ordered_data = {
             "status": data.get("status"),
             "address": data.get("address"),
@@ -349,11 +346,9 @@ def get_vehicle_info():
             "author": "@KINGFFAIAK47x"
         }
         
-        # Add proxy info if available
         if data.get("proxy_used"):
             ordered_data["proxy_used"] = data.get("proxy_used")
         
-        # Remove None values
         ordered_data = {k: v for k, v in ordered_data.items() if v is not None and v != ""}
         return jsonify(ordered_data)
         
@@ -365,32 +360,7 @@ def get_vehicle_info():
         }), 500
 
 # ===============================================
-# CONSOLE DISPLAY
-# ===============================================
-def print_banner():
-    banner = f"""
-╔═══════════════════════════════════════════════════════════╗
-║                                                           ║
-║        🚗 VEHICLE INFORMATION SYSTEM 🚗                   ║
-║                                                           ║
-║     Proxy is MANDATORY for every request                  ║
-║     Proxy Provider: Webshare                             ║
-║     Author: @KINGFFAIAK47x                               ║
-║                                                           ║
-╚═══════════════════════════════════════════════════════════╝
-    """
-    print(banner)
-    print(f"📊 Total Proxies: {len(PROXY_LIST)}")
-    print(f"🔍 Testing proxies on startup...\n")
-    get_working_proxies()
-
-# ===============================================
 # MAIN
 # ===============================================
 if __name__ == "__main__":
-    print_banner()
-    print("✅ API Running on: http://localhost:8888")
-    print("📡 Test Proxies: http://localhost:8888/api/test-proxies")
-    print("🚗 Vehicle Info: http://localhost:8888/api/vehicle-info?rc=DL01AB1234")
-    print("\n" + "="*60 + "\n")
     app.run(host="0.0.0.0", port=8888, debug=False)
