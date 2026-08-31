@@ -17,9 +17,8 @@ app = Flask(__name__)
 # ===============================================
 SCRAPERAPI_KEY = "14d97e04e110dc29b6c6efc054ecd808"
 
-# ✅ Optimized - Only 1 credit
-PROXY_CONFIG = {
-    "https": f"scraperapi:{SCRAPERAPI_KEY}@proxy-server.scraperapi.com:8001"
+proxies = {
+  "https": "scraperapi.output_format=json.autoparse=true:14d97e04e110dc29b6c6efc054ecd808@proxy-server.scraperapi.com:8001"
 }
 
 HEADERS = {
