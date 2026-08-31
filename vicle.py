@@ -10,162 +10,116 @@ import random
 app = Flask(__name__)
 
 # ===============================================
-# HTTP/HTTPS PROXY CONFIGURATION (Updated)
+# HTTP/HTTPS PROXY CONFIGURATION (Updated from image)
 # ===============================================
 PROXY_LIST = [
-    # New proxies from image
+    # Proxies from the image
     {
-        "ip": "104.19.112.172",
+        "ip": "190.93.247.25",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "Costa Rica",
+        "city": "San Jose",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.16.107.173",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "162.159.136.29",
+        "ip": "154.194.12.138",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "Singapore",
+        "city": "Singapore",
+        "protocol": "http"
+    },
+    {
+        "ip": "45.194.53.74",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "Phoenix",
         "protocol": "http"
     },
     {
-        "ip": "162.169.242.193",
+        "ip": "104.16.0.152",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "104.27.79.29",
+        "ip": "104.21.21.232",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "104.20.220.109",
+        "ip": "104.18.133.238",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "104.18.105.64",
+        "ip": "199.34.229.75",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "Oakland",
         "protocol": "http"
     },
     {
-        "ip": "104.25.89.184",
+        "ip": "23.227.39.166",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "Canada",
+        "city": "Ottawa",
+        "protocol": "http"
+    },
+    {
+        "ip": "172.67.201.200",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "104.26.54.22",
+        "ip": "104.18.211.99",
         "port": "80",
         "username": None,
         "password": None,
         "country": "United States",
-        "city": "Newark",
-        "protocol": "http"
-    },
-    # Previous Webshare proxies
-    {
-        "ip": "31.59.20.176",
-        "port": "6754",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "United Kingdom",
-        "city": "London",
+        "city": "San Francisco",
         "protocol": "http"
     },
     {
-        "ip": "45.38.107.97",
-        "port": "6014",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "United Kingdom",
-        "city": "London",
-        "protocol": "http"
-    },
-    {
-        "ip": "198.105.121.200",
-        "port": "6462",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "United Kingdom",
-        "city": "London",
-        "protocol": "http"
-    },
-    {
-        "ip": "64.137.96.74",
-        "port": "6641",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "Spain",
-        "city": "Madrid",
-        "protocol": "http"
-    },
-    {
-        "ip": "198.23.243.226",
-        "port": "6361",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
+        "ip": "172.67.181.249",
+        "port": "80",
+        "username": None,
+        "password": None,
         "country": "United States",
-        "city": "Los Angeles",
-        "protocol": "http"
-    },
-    {
-        "ip": "84.247.60.125",
-        "port": "6095",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "Poland",
-        "city": "Warsaw",
-        "protocol": "http"
-    },
-    {
-        "ip": "142.111.67.146",
-        "port": "5611",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "Japan",
-        "city": "Tokyo",
-        "protocol": "http"
-    },
-    {
-        "ip": "191.96.254.138",
-        "port": "6185",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "United States",
-        "city": "Los Angeles",
-        "protocol": "http"
-    },
-    {
-        "ip": "31.58.9.4",
-        "port": "6077",
-        "username": "ANSHBR01",
-        "password": "BRO12341",
-        "country": "Germany",
-        "city": "Frankfurt",
+        "city": "San Francisco",
         "protocol": "http"
     }
 ]
