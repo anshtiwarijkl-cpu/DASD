@@ -10,9 +10,83 @@ import random
 app = Flask(__name__)
 
 # ===============================================
-# HTTP/HTTPS PROXY CONFIGURATION
+# HTTP/HTTPS PROXY CONFIGURATION (Updated)
 # ===============================================
 PROXY_LIST = [
+    # New proxies from image
+    {
+        "ip": "104.19.112.172",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "162.159.136.29",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "162.169.242.193",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.27.79.29",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.20.220.109",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.18.105.64",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.25.89.184",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    {
+        "ip": "104.26.54.22",
+        "port": "80",
+        "username": None,
+        "password": None,
+        "country": "United States",
+        "city": "Newark",
+        "protocol": "http"
+    },
+    # Previous Webshare proxies
     {
         "ip": "31.59.20.176",
         "port": "6754",
@@ -115,8 +189,12 @@ LAST_TEST_TIME = 0
 def test_proxy(proxy):
     """Test HTTP/HTTPS proxy"""
     try:
-        # HTTP proxy format
-        proxy_url = f"http://{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
+        # Build proxy URL
+        if proxy.get('username') and proxy.get('password'):
+            proxy_url = f"http://{proxy['username']}:{proxy['password']}@{proxy['ip']}:{proxy['port']}"
+        else:
+            proxy_url = f"http://{proxy['ip']}:{proxy['port']}"
+        
         proxies = {
             'http': proxy_url,
             'https': proxy_url
@@ -129,12 +207,14 @@ def test_proxy(proxy):
         )
         
         if test_response.status_code == 200:
+            ip_data = test_response.json()
             return {
                 "status": "working",
                 "proxy": f"{proxy['ip']}:{proxy['port']}",
                 "country": proxy['country'],
                 "city": proxy['city'],
-                "proxy_obj": proxy
+                "proxy_obj": proxy,
+                "response_ip": ip_data.get('ip')
             }
         return {"status": "failed"}
     except Exception as e:
@@ -153,18 +233,18 @@ def get_working_proxies():
     print("Testing proxies...")
     WORKING_PROXIES = []
     
-    # Test proxies
-    for proxy in PROXY_LIST[:5]:  # Test first 5
+    # Test all proxies
+    for proxy in PROXY_LIST:
         result = test_proxy(proxy)
         if result.get('status') == 'working':
             WORKING_PROXIES.append(result)
-            print(f"✅ {proxy['ip']}:{proxy['port']} WORKING")
+            print(f"✅ {proxy['ip']}:{proxy['port']} WORKING - IP: {result.get('response_ip')}")
         else:
             print(f"❌ {proxy['ip']}:{proxy['port']} FAILED")
-        time.sleep(0.3)
+        time.sleep(0.2)
     
     LAST_TEST_TIME = current_time
-    print(f"Total working: {len(WORKING_PROXIES)}")
+    print(f"Total working: {len(WORKING_PROXIES)}/{len(PROXY_LIST)}")
     return WORKING_PROXIES
 
 # ===============================================
@@ -191,10 +271,16 @@ def get_vehicle_details(rc_number: str):
     # Try with proxies
     random.shuffle(working_proxies)
     
-    for proxy_info in working_proxies[:3]:
+    for proxy_info in working_proxies[:5]:
         try:
             proxy_obj = proxy_info['proxy_obj']
-            proxy_url = f"http://{proxy_obj['username']}:{proxy_obj['password']}@{proxy_obj['ip']}:{proxy_obj['port']}"
+            
+            # Build proxy URL
+            if proxy_obj.get('username') and proxy_obj.get('password'):
+                proxy_url = f"http://{proxy_obj['username']}:{proxy_obj['password']}@{proxy_obj['ip']}:{proxy_obj['port']}"
+            else:
+                proxy_url = f"http://{proxy_obj['ip']}:{proxy_obj['port']}"
+            
             proxies = {
                 'http': proxy_url,
                 'https': proxy_url
@@ -290,6 +376,7 @@ def health():
         "api": "active",
         "author": "@KINGFFAIAK47x",
         "working_proxies": len(WORKING_PROXIES),
+        "total_proxies": len(PROXY_LIST),
         "timestamp": time.time()
     })
 
@@ -308,7 +395,8 @@ def test_proxies():
             {
                 "proxy": p['proxy'],
                 "country": p['country'],
-                "city": p['city']
+                "city": p['city'],
+                "response_ip": p.get('response_ip')
             } for p in working
         ],
         "response_time_ms": response_time_ms,
@@ -363,4 +451,8 @@ def get_vehicle_info():
 # MAIN
 # ===============================================
 if __name__ == "__main__":
+    print("🚗 Vehicle Information System")
+    print("👤 Author: @KINGFFAIAK47x")
+    print(f"📊 Total Proxies: {len(PROXY_LIST)}")
+    print("✅ Running on: http://localhost:8888")
     app.run(host="0.0.0.0", port=8888, debug=False)
