@@ -17,8 +17,9 @@ app = Flask(__name__)
 # ===============================================
 SCRAPERAPI_KEY = "14d97e04e110dc29b6c6efc054ecd808"
 
+# ScraperAPI proxy configuration
 proxies = {
-  "https": "scraperapi.output_format=json.autoparse=true:14d97e04e110dc29b6c6efc054ecd808@proxy-server.scraperapi.com:8001"
+    "https": f"scraperapi.output_format=json.autoparse=true:{SCRAPERAPI_KEY}@proxy-server.scraperapi.com:8001"
 }
 
 HEADERS = {
@@ -42,7 +43,7 @@ def get_vehicle_details(rc_number: str):
         response = requests.get(
             url,
             headers=HEADERS,
-            proxies=PROXY_CONFIG,
+            proxies=proxies,
             verify=False,
             timeout=30
         )
