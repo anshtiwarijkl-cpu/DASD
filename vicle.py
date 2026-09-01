@@ -2,11 +2,10 @@
 # Author: @KINGFFAIAK47x
 
 import requests
-from bs4 import BeautifulSoup
 from flask import Flask, request, jsonify
 import time
 import urllib3
-import re
+import json
 
 # Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -18,27 +17,56 @@ app = Flask(__name__)
 # ===============================================
 SCRAPERAPI_KEY = "14d97e04e110dc29b6c6efc054ecd808"
 
-# ScraperAPI proxy configuration
-proxies = {
-    "https": f"scraperapi.output_format=json.autoparse=true:{SCRAPERAPI_KEY}@proxy-server.scraperapi.com:8001"
-}
-
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "Referer": "https://vahanx.in/",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+    "Accept": "application/json, text/html, */*",
     "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive"
 }
 
 # ===============================================
-# VEHICLE SCRAPER WITH SCRAPERAPI
+# DIRECT API CALL TO VAHANX
 # ===============================================
 def get_vehicle_details(rc_number: str):
-    """Fetch vehicle details using ScraperAPI proxy"""
+    """Fetch vehicle details directly from VahanX API"""
     rc = rc_number.strip().upper()
-    url = f"https://vahanx.in/rc-search/{rc}"
+    
+    # VahanX API endpoint
+    url = f"https://vahanx.in/api/rc_search/?number={rc}"
+    
+    try:
+        # Direct request without proxy first
+        response = requests.get(
+            url,
+            headers=HEADERS,
+            verify=False,
+            timeout=30
+        )
+        
+        if response.status_code == 200:
+            try:
+                data = response.json()
+                return parse_api_response(data)
+            except:
+                # If direct fails, try with proxy
+                return get_vehicle_details_with_proxy(rc)
+        else:
+            # Try with proxy
+            return get_vehicle_details_with_proxy(rc)
+            
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def get_vehicle_details_with_proxy(rc_number: str):
+    """Fetch using ScraperAPI proxy"""
+    rc = rc_number.strip().upper()
+    url = f"https://vahanx.in/api/rc_search/?number={rc}"
+    
+    proxies = {
+        "https": f"scraperapi:{SCRAPERAPI_KEY}@proxy-server.scraperapi.com:8001"
+    }
     
     try:
         response = requests.get(
@@ -50,205 +78,113 @@ def get_vehicle_details(rc_number: str):
         )
         
         if response.status_code == 200:
-            try:
-                data = response.json()
-                if 'html' in data:
-                    return parse_response(data['html'], proxy_used="ScraperAPI")
-                elif 'body' in data:
-                    return parse_response(data['body'], proxy_used="ScraperAPI")
-                else:
-                    return parse_scraperapi_json(data)
-            except:
-                return parse_response(response.text, proxy_used="ScraperAPI")
+            data = response.json()
+            return parse_api_response(data)
         else:
             return {"status": "error", "message": f"HTTP {response.status_code}"}
             
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-def parse_scraperapi_json(data):
-    """Parse ScraperAPI JSON response"""
+def parse_api_response(data):
+    """Parse VahanX API JSON response"""
     try:
-        result = {"status": "success"}
-        
-        fields = {
-            'address': ['address', 'owner_address', 'reg_address', 'Address'],
-            'phone': ['phone', 'mobile', 'contact', 'Phone', 'Mobile'],
-            'city': ['city', 'district', 'City', 'District']
+        result = {
+            "status": "success",
+            "owner_details": {},
+            "vehicle_details": {},
+            "insurance_details": {},
+            "registration_details": {},
+            "important_dates": {},
+            "contact_details": {},
+            "challan_info": {},
+            "full_data": data  # Keep full data for reference
         }
         
-        for key, possible_keys in fields.items():
-            for possible in possible_keys:
-                if possible in data:
-                    result[key] = data[possible]
-                    break
-                for k, v in data.items():
-                    if isinstance(v, dict) and possible in v:
-                        result[key] = v[possible]
-                        break
+        # Extract owner details
+        if "owner_name" in data:
+            result["owner_details"]["owner_name"] = data.get("owner_name", "N/A")
+        if "owner_serial" in data:
+            result["owner_details"]["owner_serial"] = data.get("owner_serial", "N/A")
+        if "registered_rto" in data:
+            result["owner_details"]["registered_rto"] = data.get("registered_rto", "N/A")
         
-        result["proxy_used"] = "ScraperAPI"
-        return {k: v for k, v in result.items() if v is not None and v != ""}
+        # Extract vehicle details
+        vehicle = data.get("vehicle", {})
+        if isinstance(vehicle, dict):
+            result["vehicle_details"]["model_name"] = vehicle.get("model_name", "N/A")
+            result["vehicle_details"]["maker_model"] = vehicle.get("maker_model", "N/A")
+            result["vehicle_details"]["vehicle_class"] = vehicle.get("vehicle_class", "N/A")
+            result["vehicle_details"]["fuel_type"] = vehicle.get("fuel_type", "N/A")
+            result["vehicle_details"]["chassis_number"] = vehicle.get("chassis_number", "N/A")
+            result["vehicle_details"]["engine_number"] = vehicle.get("engine_number", "N/A")
+        elif isinstance(vehicle, str):
+            result["vehicle_details"]["model"] = vehicle
+        
+        # Extract insurance details
+        insurance = data.get("insurance", {})
+        if isinstance(insurance, dict):
+            result["insurance_details"]["insurance_expiry"] = insurance.get("insurance_expiry", "N/A")
+            result["insurance_details"]["insurance_no"] = insurance.get("insurance_no", "N/A")
+            result["insurance_details"]["insurance_company"] = insurance.get("insurance_company", "N/A")
+            result["insurance_details"]["insurance_status"] = insurance.get("status", "N/A")
+        
+        # Extract dates
+        dates = data.get("dates", {})
+        if isinstance(dates, dict):
+            result["important_dates"]["registration_date"] = dates.get("registration_date", "N/A")
+            result["important_dates"]["fitness_upto"] = dates.get("fitness_upto", "N/A")
+            result["important_dates"]["tax_upto"] = dates.get("tax_upto", "N/A")
+            result["important_dates"]["puc_expiry"] = dates.get("puc_expiry", "N/A")
+            result["important_dates"]["insurance_upto"] = dates.get("insurance_upto", "N/A")
+        
+        # Extract registration
+        reg = data.get("registration", {})
+        if isinstance(reg, dict):
+            result["registration_details"]["registration_number"] = reg.get("registration_number", rc)
+            result["registration_details"]["vehicle_age"] = reg.get("vehicle_age", "N/A")
+        
+        # Extract contact
+        contact = data.get("contact", {})
+        if isinstance(contact, dict):
+            result["contact_details"]["phone"] = contact.get("phone", "N/A")
+            result["contact_details"]["mobile"] = contact.get("mobile", "N/A")
+            result["contact_details"]["address"] = contact.get("address", "N/A")
+            result["contact_details"]["city"] = contact.get("city", "N/A")
+            result["contact_details"]["state"] = contact.get("state", "N/A")
+            result["contact_details"]["pincode"] = contact.get("pincode", "N/A")
+        
+        # Extract challan info
+        challan = data.get("challan", {})
+        if isinstance(challan, dict):
+            result["challan_info"]["total_challan"] = challan.get("total", "N/A")
+            result["challan_info"]["pending"] = challan.get("pending", "N/A")
+            result["challan_info"]["paid"] = challan.get("paid", "N/A")
+        
+        # Keep original data for complete info
+        result["raw_data"] = data
+        
+        # Remove empty sections
+        for key in list(result.keys()):
+            if isinstance(result[key], dict) and not any(v and v != "N/A" for v in result[key].values()):
+                del result[key]
+        
+        # Clean N/A values
+        def clean_dict(d):
+            if isinstance(d, dict):
+                return {k: v for k, v in d.items() if v and v != "N/A" and v != ""}
+            return d
+        
+        result = {k: clean_dict(v) if isinstance(v, dict) else v for k, v in result.items()}
+        
+        # Remove raw_data if too large
+        if "raw_data" in result:
+            del result["raw_data"]
+        
+        return result
         
     except Exception as e:
         return {"status": "error", "message": f"Parse error: {str(e)}"}
-
-def parse_response(html_content, proxy_used=None):
-    """Parse HTML response with comprehensive details"""
-    soup = BeautifulSoup(html_content, "html.parser")
-    
-    result = {
-        "status": "success",
-        "vehicle_details": {},
-        "owner_details": {},
-        "insurance_details": {},
-        "registration_details": {},
-        "important_dates": {},
-        "challan_info": {}
-    }
-    
-    # Helper function to extract text from element
-    def get_text(element):
-        if element:
-            return element.get_text(strip=True)
-        return None
-    
-    # Helper function to find value by label
-    def find_value_by_label(label_text):
-        # Try to find span with label
-        for span in soup.find_all("span"):
-            if span and label_text.lower() in span.get_text(strip=True).lower():
-                # Get parent div and find value in p tag
-                parent = span.find_parent("div")
-                if parent:
-                    p_tag = parent.find("p")
-                    if p_tag:
-                        return p_tag.get_text(strip=True)
-        return None
-    
-    # Extract all card data
-    cards = soup.find_all("div", class_=re.compile("hrcd-cardbody|card|info-card"))
-    
-    # Process each card
-    for card in cards:
-        # Find all span and p pairs
-        items = card.find_all("div", recursive=False)
-        for item in items:
-            span = item.find("span")
-            p = item.find("p")
-            if span and p:
-                label = span.get_text(strip=True)
-                value = p.get_text(strip=True)
-                
-                # Categorize based on label
-                label_lower = label.lower()
-                
-                # Owner Details
-                if "owner" in label_lower or "name" in label_lower:
-                    result["owner_details"]["owner_name"] = value
-                elif "serial" in label_lower or "first owner" in label_lower:
-                    result["owner_details"]["owner_serial"] = value
-                elif "rto" in label_lower:
-                    result["owner_details"]["registered_rto"] = value
-                
-                # Vehicle Details
-                elif "model" in label_lower:
-                    if "maker" in label_lower:
-                        result["vehicle_details"]["maker_model"] = value
-                    else:
-                        result["vehicle_details"]["model_name"] = value
-                elif "class" in label_lower:
-                    result["vehicle_details"]["vehicle_class"] = value
-                elif "fuel" in label_lower:
-                    result["vehicle_details"]["fuel_type"] = value
-                elif "chassis" in label_lower:
-                    result["vehicle_details"]["chassis_number"] = value
-                elif "engine" in label_lower:
-                    result["vehicle_details"]["engine_number"] = value
-                
-                # Registration Details
-                elif "registration" in label_lower or "reg no" in label_lower:
-                    if "date" not in label_lower:
-                        result["registration_details"]["registration_number"] = value
-                
-                # Insurance Details
-                elif "insurance" in label_lower:
-                    if "expiry" in label_lower:
-                        result["insurance_details"]["insurance_expiry"] = value
-                    elif "no" in label_lower:
-                        result["insurance_details"]["insurance_no"] = value
-                    elif "company" in label_lower:
-                        result["insurance_details"]["insurance_company"] = value
-                
-                # Important Dates
-                elif "date" in label_lower:
-                    if "registration" in label_lower:
-                        result["important_dates"]["registration_date"] = value
-                    elif "fitness" in label_lower:
-                        result["important_dates"]["fitness_upto"] = value
-                    elif "tax" in label_lower:
-                        result["important_dates"]["tax_upto"] = value
-                    elif "puc" in label_lower:
-                        if "expiry" in label_lower:
-                            result["important_dates"]["puc_expiry"] = value
-                        else:
-                            result["important_dates"]["puc_date"] = value
-                
-                # Address and Contact
-                elif "address" in label_lower:
-                    result["address"] = value
-                elif "phone" in label_lower or "mobile" in label_lower:
-                    result["phone"] = value
-                elif "city" in label_lower:
-                    result["city"] = value
-                elif "website" in label_lower:
-                    result["website"] = value
-                
-                # Challan
-                elif "challan" in label_lower:
-                    result["challan_info"]["challan_status"] = value
-    
-    # Extract address from specific div if not found above
-    if not result.get("address"):
-        address_div = soup.find("div", class_=re.compile("address|Address"))
-        if address_div:
-            result["address"] = get_text(address_div)
-    
-    # Extract city from multiple sources
-    if not result.get("city"):
-        # Try to find city from address
-        if result.get("address"):
-            # Try to extract city from address
-            address_parts = result["address"].split(",")
-            if len(address_parts) >= 2:
-                result["city"] = address_parts[-2].strip()
-        else:
-            city_value = find_value_by_label("City")
-            if city_value:
-                result["city"] = city_value
-    
-    # Extract phone
-    if not result.get("phone"):
-        phone_value = find_value_by_label("Phone")
-        if not phone_value:
-            phone_value = find_value_by_label("Mobile")
-        if phone_value:
-            result["phone"] = phone_value
-    
-    # Clean up - remove empty values
-    for key in list(result.keys()):
-        if isinstance(result[key], dict):
-            result[key] = {k: v for k, v in result[key].items() if v and v != "" and v != "None"}
-            if not result[key]:
-                del result[key]
-        elif not result[key] or result[key] == "" or result[key] == "None":
-            del result[key]
-    
-    # Add proxy info
-    if proxy_used:
-        result["proxy_used"] = proxy_used
-    
-    return result
 
 # ===============================================
 # FLASK ROUTES
@@ -258,9 +194,9 @@ def home():
     return jsonify({
         "status": "online",
         "service": "Vehicle Information API",
-        "version": "3.1",
+        "version": "4.0",
         "author": "@KINGFFAIAK47x",
-        "proxy_type": "ScraperAPI",
+        "proxy_type": "Direct API + ScraperAPI Fallback",
         "endpoints": {
             "vehicle_info": "/api/vehicle-info?rc=<RC_NUMBER>",
             "health": "/health"
@@ -285,7 +221,8 @@ def get_vehicle_info():
             "status": "error",
             "message": "Missing rc parameter",
             "usage": "/api/vehicle-info?rc=<RC_NUMBER>",
-            "author": "@KINGFFAIAK47x"
+            "author": "@KINGFFAIAK47x",
+            "example": "/api/vehicle-info?rc=MH12DE1433"
         }), 400
     
     start_time = time.time()
@@ -298,12 +235,8 @@ def get_vehicle_info():
             data["author"] = "@KINGFFAIAK47x"
             return jsonify(data), 404
         
-        # Add response time
         data["response_time_ms"] = response_time_ms
         data["author"] = "@KINGFFAIAK47x"
-        
-        # Clean empty values
-        data = {k: v for k, v in data.items() if v is not None and v != "" and v != {}}
         
         return jsonify(data)
         
@@ -318,8 +251,8 @@ def get_vehicle_info():
 # MAIN
 # ===============================================
 if __name__ == "__main__":
-    print("🚗 Vehicle Information System")
+    print("🚗 Vehicle Information System v4.0")
     print("👤 Author: @KINGFFAIAK47x")
-    print("🔐 Proxy: ScraperAPI")
+    print("🔐 Mode: Direct API + Proxy Fallback")
     print("✅ Running on: http://localhost:8888")
     app.run(host="0.0.0.0", port=8888, debug=False)
