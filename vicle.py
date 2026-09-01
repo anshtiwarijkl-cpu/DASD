@@ -186,7 +186,6 @@ def get_vehicle_info():
             "phone": data.get("phone"),
             "city": data.get("city"),
             "response_time_ms": response_time_ms,
-            "author": "@KINGFFAIAK47x"
         }
         
         ordered_data = {k: v for k, v in ordered_data.items() if v is not None and v != ""}
