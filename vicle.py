@@ -1,30 +1,29 @@
 # vicle.py - Vehicle Information System for Vercel
 # Author: @KINGFFAIAK47x
 
+import os
 import requests
 from flask import Flask, request, jsonify
 import time
 import urllib3
 import json
 import re
-from bs4 import BeautifulSoup
 
-# Disable SSL warnings
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 app = Flask(__name__)
 
 # ===============================================
-# SCRAPERAPI CONFIGURATION
+# CONFIGURATION (from Environment Variables)
 # ===============================================
-SCRAPERAPI_KEY = "14d97e04e110dc29b6c6efc054ecd808"
+SCRAPERAPI_KEY = os.environ.get('SCRAPERAPI_KEY', '')
+if not SCRAPERAPI_KEY:
+    print("⚠️ WARNING: SCRAPERAPI_KEY not set in environment variables")
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Referer": "https://vahanx.in/",
     "Accept": "application/json, text/html, */*",
     "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
     "Connection": "keep-alive"
 }
 
@@ -32,35 +31,26 @@ HEADERS = {
 # VEHICLE DETAILS FETCHER
 # ===============================================
 def get_vehicle_details(rc_number: str):
-    """Fetch vehicle details from VahanX API with ScraperAPI fallback"""
+    """Fetch vehicle details using ScraperAPI"""
     rc = rc_number.strip().upper()
     
-    # Direct API endpoint
-    url = f"https://vahanx.in/api/rc_search/?number={rc}"
+    if not SCRAPERAPI_KEY:
+        return {
+            "status": "error",
+            "message": "SCRAPERAPI_KEY not configured",
+            "author": "@KINGFFAIAK47x"
+        }
     
-    # Try direct first
-    try:
-        response = requests.get(url, headers=HEADERS, verify=False, timeout=15)
-        if response.status_code == 200:
-            return parse_response(response)
-    except Exception as e:
-        print(f"Direct API failed: {e}")
+    url = "https://api.scraperapi.com/"
+    target_url = f"https://vahanx.in/api/rc_search/?number={rc}"
     
-    # If direct fails, use ScraperAPI
-    return get_with_scraperapi(rc)
-
-def get_with_scraperapi(rc_number: str):
-    """Fetch using ScraperAPI structured API"""
-    rc = rc_number.strip().upper()
-    url = "https://api.scraperapi.com/structured/web/v1"
-    
-    # Use ScraperAPI's structured web scraping
     params = {
         'api_key': SCRAPERAPI_KEY,
-        'url': f"https://vahanx.in/api/rc_search/?number={rc}",
+        'url': target_url,
         'render': 'true',
         'country_code': 'in',
-        'premium_proxy': 'true'
+        'premium_proxy': 'true',
+        'timeout': '60000'
     }
     
     try:
@@ -73,193 +63,185 @@ def get_with_scraperapi(rc_number: str):
         )
         
         if response.status_code == 200:
-            # Try to parse as JSON
-            try:
-                data = response.json()
-                return parse_response_from_data(data)
-            except:
-                # If not JSON, try HTML parsing
-                return parse_html(response.text)
-        else:
-            # Fallback to traditional proxy
-            return get_with_proxy(rc)
-            
-    except Exception as e:
-        # Last resort: traditional proxy
-        return get_with_proxy(rc)
-
-def get_with_proxy(rc_number: str):
-    """Fetch using ScraperAPI proxy fallback"""
-    rc = rc_number.strip().upper()
-    
-    # Use ScraperAPI proxy with proper format
-    proxy_url = f"http://scraperapi:{SCRAPERAPI_KEY}@proxy-server.scraperapi.com:8001"
-    
-    proxies = {
-        "http": proxy_url,
-        "https": proxy_url
-    }
-    
-    url = f"https://vahanx.in/api/rc_search/?number={rc}"
-    
-    try:
-        response = requests.get(
-            url,
-            headers=HEADERS,
-            proxies=proxies,
-            verify=False,
-            timeout=30
-        )
-        
-        if response.status_code == 200:
             return parse_response(response)
         else:
             return {
-                "status": "error", 
-                "message": f"HTTP {response.status_code}",
+                "status": "error",
+                "message": f"ScraperAPI returned {response.status_code}",
                 "author": "@KINGFFAIAK47x"
             }
             
+    except requests.exceptions.Timeout:
+        return {
+            "status": "error",
+            "message": "Request timed out. Please try again.",
+            "author": "@KINGFFAIAK47x"
+        }
     except Exception as e:
         return {
-            "status": "error", 
+            "status": "error",
             "message": str(e),
             "author": "@KINGFFAIAK47x"
         }
 
 def parse_response(response):
-    """Parse API response"""
+    """Parse API response with more details and NA handling"""
     try:
         data = response.json()
-        return parse_response_from_data(data)
-    except json.JSONDecodeError:
-        return parse_html(response.text)
-
-def parse_response_from_data(data):
-    """Parse vehicle data from JSON"""
-    # If data is already the vehicle info
-    if "data" in data:
-        data = data["data"]
-    
-    # Check if we have valid data
-    if not data or isinstance(data, list):
-        return {
-            "status": "error",
-            "message": "No vehicle data found",
-            "author": "@KINGFFAIAK47x"
-        }
-    
-    result = {
-        "status": "success",
-        "owner_details": {},
-        "vehicle_details": {},
-        "insurance_details": {},
-        "registration_details": {},
-        "important_dates": {},
-        "contact_details": {},
-        "author": "@KINGFFAIAK47x"
-    }
-    
-    # Map fields from API response
-    field_mappings = {
-        "owner_details": {
-            "owner_name": "Owner Name",
-            "owner_serial": "Owner Serial",
-            "registered_rto": "Registered RTO",
-            "first_owner": "First Owner"
-        },
-        "vehicle_details": {
-            "model_name": "Model Name",
-            "maker_model": "Maker Model",
-            "vehicle_class": "Vehicle Class",
-            "fuel_type": "Fuel Type",
-            "chassis_number": "Chassis Number",
-            "engine_number": "Engine Number",
-            "color": "Color",
-            "seating_capacity": "Seating Capacity"
-        },
-        "insurance_details": {
-            "insurance_expiry": "Insurance Expiry",
-            "insurance_no": "Insurance Number",
-            "insurance_company": "Insurance Company",
-            "policy_number": "Policy Number"
-        },
-        "registration_details": {
-            "registration_number": "Registration Number",
-            "vehicle_age": "Vehicle Age",
-            "registering_authority": "Registering Authority"
-        },
-        "important_dates": {
-            "registration_date": "Registration Date",
-            "fitness_upto": "Fitness Upto",
-            "tax_upto": "Tax Upto",
-            "puc_expiry": "PUC Expiry",
-            "insurance_upto": "Insurance Upto"
-        },
-        "contact_details": {
-            "phone": "Phone",
-            "mobile": "Mobile",
-            "address": "Address",
-            "city": "City",
-            "state": "State",
-            "pincode": "Pincode"
-        }
-    }
-    
-    # Populate result from data
-    for section, fields in field_mappings.items():
-        for key, label in fields.items():
-            if key in data and data[key]:
-                result[section][label] = data[key]
-    
-    # Remove empty sections
-    for key in list(result.keys()):
-        if isinstance(result[key], dict) and not result[key]:
-            del result[key]
-    
-    return result
-
-def parse_html(html_content):
-    """Parse HTML as fallback"""
-    try:
-        soup = BeautifulSoup(html_content, "html.parser")
+        
+        if "data" in data:
+            data = data["data"]
+        
+        if not data or isinstance(data, list):
+            return {
+                "status": "error",
+                "message": "No vehicle data found",
+                "author": "@KINGFFAIAK47x"
+            }
         
         result = {
             "status": "success",
-            "details": {},
+            "registration_number": data.get("registration_number", "NA"),
+            "vehicle_details": {},
+            "owner_details": {},
+            "insurance_details": {},
+            "registration_details": {},
+            "important_dates": {},
+            "additional_details": {},
             "author": "@KINGFFAIAK47x"
         }
         
-        # Extract all divs with labels
-        for div in soup.find_all(["div", "li", "tr"]):
-            text = div.get_text(strip=True)
-            if ":" in text:
-                parts = text.split(":", 1)
-                if len(parts) == 2:
-                    label = parts[0].strip()
-                    value = parts[1].strip()
-                    if label and value:
-                        result["details"][label] = value
+        # =============================================
+        # VEHICLE DETAILS (More Fields)
+        # =============================================
+        vehicle_fields = {
+            "maker_model": "Make/Model",
+            "model_name": "Model Name",
+            "vehicle_class": "Vehicle Class",
+            "body_type": "Body Type",
+            "fuel_type": "Fuel Type",
+            "engine_number": "Engine Number",
+            "chassis_number": "Chassis Number",
+            "color": "Colour",
+            "seating_capacity": "Seating Capacity",
+            "sleeping_capacity": "Sleeping Capacity",
+            "cubic_capacity": "Cubic Capacity (CC)",
+            "horse_power": "Horse Power",
+            "weight": "Weight (kg)",
+            "gross_weight": "Gross Weight (kg)",
+            "unladen_weight": "Unladen Weight (kg)",
+            "axle_weight": "Axle Weight",
+            "wheel_base": "Wheel Base",
+            "tyre_size": "Tyre Size",
+            "number_of_tyres": "Number of Tyres",
+            "fuel_type_original": "Original Fuel Type",
+            "cng_kit_fitted": "CNG Kit Fitted",
+            "emission_norms": "Emission Norms",
+            "norms_type": "Norms Type",
+            "fitment_details": "Fitment Details"
+        }
         
-        # If no details found, try extracting from table
-        if not result["details"]:
-            tables = soup.find_all("table")
-            for table in tables:
-                rows = table.find_all("tr")
-                for row in rows:
-                    cols = row.find_all(["td", "th"])
-                    if len(cols) >= 2:
-                        label = cols[0].get_text(strip=True)
-                        value = cols[1].get_text(strip=True)
-                        if label and value:
-                            result["details"][label] = value
+        for key, label in vehicle_fields.items():
+            result["vehicle_details"][label] = data.get(key, "NA")
+        
+        # =============================================
+        # OWNER DETAILS
+        # =============================================
+        owner_fields = {
+            "owner_name": "Owner Name",
+            "owner_serial": "Owner Serial",
+            "first_owner": "First Owner",
+            "registered_rto": "Registered RTO",
+            "registering_authority": "Registering Authority",
+            "owner_ship_type": "Ownership Type",
+            "purchase_date": "Purchase Date",
+            "financier": "Financier",
+            "hypothecation": "Hypothecation"
+        }
+        
+        for key, label in owner_fields.items():
+            result["owner_details"][label] = data.get(key, "NA")
+        
+        # =============================================
+        # INSURANCE DETAILS
+        # =============================================
+        insurance_fields = {
+            "insurance_company": "Insurance Company",
+            "insurance_type": "Insurance Type",
+            "insurance_no": "Insurance Number",
+            "insurance_expiry": "Insurance Expiry",
+            "policy_number": "Policy Number",
+            "insurance_upto": "Insurance Valid Upto",
+            "insurance_status": "Insurance Status"
+        }
+        
+        for key, label in insurance_fields.items():
+            result["insurance_details"][label] = data.get(key, "NA")
+        
+        # =============================================
+        # REGISTRATION DETAILS
+        # =============================================
+        reg_fields = {
+            "registration_date": "Registration Date",
+            "registration_validity": "Registration Validity",
+            "vehicle_age": "Vehicle Age (Years)",
+            "registered_at": "Registered At",
+            "rto_office": "RTO Office",
+            "rto_code": "RTO Code",
+            "state": "State",
+            "district": "District",
+            "city": "City"
+        }
+        
+        for key, label in reg_fields.items():
+            result["registration_details"][label] = data.get(key, "NA")
+        
+        # =============================================
+        # IMPORTANT DATES
+        # =============================================
+        date_fields = {
+            "registration_date": "Registration Date",
+            "fitness_upto": "Fitness Certificate Valid Upto",
+            "tax_upto": "Road Tax Valid Upto",
+            "puc_expiry": "PUC Expiry Date",
+            "insurance_upto": "Insurance Valid Upto",
+            "permit_validity": "Permit Validity",
+            "national_permit": "National Permit Validity",
+            "fc_validity": "FC Validity"
+        }
+        
+        for key, label in date_fields.items():
+            result["important_dates"][label] = data.get(key, "NA")
+        
+        # =============================================
+        # ADDITIONAL DETAILS
+        # =============================================
+        additional_fields = {
+            "permit_type": "Permit Type",
+            "permit_number": "Permit Number",
+            "permit_issued": "Permit Issued Date",
+            "permit_validity": "Permit Validity",
+            "tax_amount": "Tax Amount",
+            "tax_paid_upto": "Tax Paid Upto",
+            "fitness_number": "Fitness Certificate Number",
+            "fitness_issued": "Fitness Issued Date",
+            "fitness_validity": "Fitness Validity",
+            "puc_number": "PUC Certificate Number",
+            "puc_issued": "PUC Issued Date",
+            "puc_validity": "PUC Validity",
+            "norm_type": "Norm Type",
+            "vehicle_status": "Vehicle Status"
+        }
+        
+        for key, label in additional_fields.items():
+            result["additional_details"][label] = data.get(key, "NA")
         
         return result
         
-    except Exception as e:
+    except json.JSONDecodeError:
         return {
             "status": "error",
-            "message": f"Failed to parse HTML: {str(e)}",
+            "message": "Invalid response format",
             "author": "@KINGFFAIAK47x"
         }
 
@@ -271,9 +253,13 @@ def home():
     return jsonify({
         "status": "online",
         "service": "Vehicle Information API",
-        "version": "5.0",
+        "version": "6.1",
         "author": "@KINGFFAIAK47x",
-        "proxy_type": "ScraperAPI Structured + Proxy Fallback",
+        "features": [
+            "60+ Vehicle Details",
+            "NA for missing fields",
+            "ScraperAPI Proxy"
+        ],
         "endpoints": {
             "vehicle_info": "/api/vehicle-info?rc=<RC_NUMBER>",
             "health": "/health"
@@ -286,7 +272,7 @@ def health():
         "status": "healthy",
         "api": "active",
         "author": "@KINGFFAIAK47x",
-        "timestamp": time.time()
+        "timestamp": int(time.time())
     })
 
 @app.route("/api/vehicle-info", methods=["GET"])
@@ -306,9 +292,7 @@ def get_vehicle_info():
     
     try:
         data = get_vehicle_details(rc)
-        response_time_ms = int((time.time() - start_time) * 1000)
-        
-        data["response_time_ms"] = response_time_ms
+        data["response_time_ms"] = int((time.time() - start_time) * 1000)
         data["author"] = "@KINGFFAIAK47x"
         
         if data.get("status") == "error":
@@ -323,31 +307,5 @@ def get_vehicle_info():
             "author": "@KINGFFAIAK47x"
         }), 500
 
-# ===============================================
-# VERIFICATION FUNCTION
-# ===============================================
-def test_vehicle_info(rc_number):
-    """Test function to check if API is working"""
-    print(f"Testing for RC: {rc_number}")
-    result = get_vehicle_details(rc_number)
-    print(json.dumps(result, indent=2))
-    return result
-
-# ===============================================
-# MAIN
-# ===============================================
 if __name__ == "__main__":
-    print("🚗 Vehicle Information System v5.0")
-    print("👤 Author: @KINGFFAIAK47x")
-    print("🔐 Mode: ScraperAPI Structured + Proxy Fallback")
-    print("✅ Running on: http://localhost:8888")
-    print("\n📋 Test Commands:")
-    print("  http://localhost:8888/api/vehicle-info?rc=MH12DE1433")
-    print("  http://localhost:8888/health")
-    print("  http://localhost:8888/")
-    
-    # Test automatically
-    print("\n🔍 Running test for MH12DE1433...")
-    test_vehicle_info("MH12DE1433")
-    
-    app.run(host="0.0.0.0", port=8888, debug=False)
+    app.run(host="0.0.0.0", port=8888)
